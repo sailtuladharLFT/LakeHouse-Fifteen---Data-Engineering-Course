@@ -68,3 +68,7 @@ fi
 # Call hash to forget past commands. Without forgetting
 # past commands the $PATH changes we made may not be respected
 hash -r 2> /dev/null
+
+# Java for PySpark
+export JAVA_HOME=/home/leapfrog/.jdk/jdk-17.0.20.1+1
+export PATH=$JAVA_HOME/bin:$PATH
