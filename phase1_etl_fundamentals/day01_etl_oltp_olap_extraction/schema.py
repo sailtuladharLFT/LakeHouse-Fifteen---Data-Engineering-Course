@@ -190,6 +190,76 @@ def create_fact_post_metrics_table(conn):
         )
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Day 04 — Comments pipeline tables
+# ──────────────────────────────────────────────────────────────────────────────
+
+def create_stg_comments_table(conn):
+    """Staging table: raw JSONB payload per comment, one row per API record."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS staging.stg_comments(
+            id            INT PRIMARY KEY,
+            raw_payload   JSONB NOT NULL,
+            extracted_at  TIMESTAMPTZ DEFAULT NOW()
+            );
+            """
+        )
+
+
+def create_dim_user_table(conn):
+    """
+    SCD Type 2 dimension: tracks changes to a user's username and full_name.
+    When either field changes, the old row is expired (is_current → FALSE,
+    valid_to set) and a new current row is inserted.
+    The partial unique index ensures only one current row exists per user_id.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS warehouse.dim_user(
+            user_sk     SERIAL  PRIMARY KEY,
+            user_id     INT     NOT NULL,
+            username    TEXT,
+            full_name   TEXT,
+            is_current  BOOLEAN NOT NULL DEFAULT TRUE,
+            valid_from  DATE    NOT NULL,
+            valid_to    DATE
+            );
+            """
+        )
+        # Partial unique index — only one current row allowed per user_id
+        cur.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS udx_dim_user_current
+            ON warehouse.dim_user(user_id)
+            WHERE is_current = TRUE;
+            """
+        )
+
+
+def create_fact_comment_metrics_table(conn):
+    """
+    Fact table: one row per comment per day capturing engagement metrics.
+    post_id is denormalized here — the comments API gives us only a postId
+    reference, not enough post content to justify a separate dim_post join.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS warehouse.fact_comment_metrics(
+            metrics_id  SERIAL  PRIMARY KEY,
+            comment_id  INT     NOT NULL,
+            user_sk     INT     NOT NULL REFERENCES warehouse.dim_user(user_sk),
+            post_id     INT     NOT NULL,
+            date_key    INT     NOT NULL REFERENCES warehouse.dim_date(date_key),
+            likes       INT
+            );
+            """
+        )
+
+
 def bootstrap_schema(conn) -> None:
 
     with conn.cursor() as cur:
@@ -213,6 +283,12 @@ def bootstrap_schema(conn) -> None:
     create_dim_post_table(conn)
     create_bridge_post_tag_table(conn)       # bridge after both dims it references
     create_fact_post_metrics_table(conn)     # fact last — references dim_post + dim_date
+
+    # ── Day 04: Comments pipeline ─────────────────────────────────────────────
+    # stg_comments first, then dim_user (SCD2), then fact (references both dim_user + dim_date)
+    create_stg_comments_table(conn)
+    create_dim_user_table(conn)
+    create_fact_comment_metrics_table(conn)  # fact last — references dim_user + dim_date
 
     conn.commit()
     print("Bootstrap complete: staging + warehouse schemas and all tables created")
