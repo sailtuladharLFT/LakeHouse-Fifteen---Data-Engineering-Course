@@ -1,1 +1,5 @@
 .env
+
+# Large JAR dependencies - download locally, not tracked in git
+phase2_spark/day06/jars/aws-java-sdk-bundle-*.jar
+phase2_spark/day06/jars/aws-java-sdk-v2-bundle-*.jar
