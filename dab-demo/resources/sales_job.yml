@@ -1,0 +1,34 @@
+resources:
+  jobs:
+    sales_job:
+      name: dab_demo_sales_job
+
+      email_notifications:
+        on_failure:
+          - sailratna11@gmail.com
+
+      tasks:
+        # Task 1: Ingest raw sales data into Bronze
+        - task_key: ingest_bronze
+          spark_python_task:
+            python_file: ../src/ingestion.py
+            source: WORKSPACE
+          environment_key: default
+          max_retries: 2
+          min_retry_interval_millis: 30000
+          retry_on_timeout: true
+
+        # Task 2: Refresh the Silver/Gold pipeline
+        - task_key: refresh_sales_pipeline
+          depends_on:
+            - task_key: ingest_bronze
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.sales_pipeline.id}
+          max_retries: 1
+
+      # Serverless environment for the Python ingestion task
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "4"
+            dependencies: []

@@ -1,0 +1,10 @@
+resources:
+  pipelines:
+    sales_pipeline:
+      name: dab_demo_sales_pipeline
+      catalog: dev_catalog
+      schema: silver
+      serverless: true
+      libraries:
+        - file:
+            path: ../pipelines/transformations.py
